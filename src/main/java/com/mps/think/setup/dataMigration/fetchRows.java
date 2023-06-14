@@ -23,28 +23,68 @@ import com.mps.think.setup.model.InventoryOrderSettings;
 import com.mps.think.setup.model.InventoryStorageLocations;
 import com.mps.think.setup.model.InventoryTotals;
 import com.mps.think.setup.model.InventoryUnitInformation;
+import com.mps.think.setup.model.LableFormat;
+import com.mps.think.setup.model.LableFormatGroups;
+import com.mps.think.setup.model.LableGroup;
+import com.mps.think.setup.model.LableKeyLine;
+import com.mps.think.setup.model.Order;
 import com.mps.think.setup.model.OrderClass;
 import com.mps.think.setup.model.OrderCodes;
 import com.mps.think.setup.model.OrderCodesSuper;
+import com.mps.think.setup.model.OrderDeliveryOptions;
 import com.mps.think.setup.model.OrderItemDetails;
+import com.mps.think.setup.model.OrderItems;
+import com.mps.think.setup.model.OrderKeyInformation;
+import com.mps.think.setup.model.OrderOptions;
+import com.mps.think.setup.model.OrderPaymentOptions;
+import com.mps.think.setup.model.PaymentBreakdown;
+import com.mps.think.setup.model.PaymentType;
+import com.mps.think.setup.model.ProfitCenter;
 import com.mps.think.setup.model.Publisher;
 import com.mps.think.setup.model.RateCards;
 import com.mps.think.setup.model.RateCardsRenewals;
+import com.mps.think.setup.model.ShippingPriceList;
+import com.mps.think.setup.model.SourceAttributes;
+import com.mps.think.setup.model.SourceCode;
+import com.mps.think.setup.model.SourceFormat;
+import com.mps.think.setup.model.SourceFormatAndAttributeMapping;
+import com.mps.think.setup.model.SubscriptionDefKeyInfo;
+import com.mps.think.setup.model.Terms;
 import com.mps.think.setup.repo.CustomerCategoryRepo;
+import com.mps.think.setup.repo.CustomerDetailsRepo;
+import com.mps.think.setup.repo.LableFormatRepo;
+import com.mps.think.setup.repo.LableGroupRepo;
 import com.mps.think.setup.repo.OrderClassRepo;
+import com.mps.think.setup.repo.OrderCodesSuperRepo;
 import com.mps.think.setup.repo.PublisherRepo;
 import com.mps.think.setup.repo.RateCardsRepo;
 import com.mps.think.setup.vo.EnumModelVO.AddressType;
 import com.mps.think.setup.vo.EnumModelVO.Currency;
 import com.mps.think.setup.vo.EnumModelVO.CustomerStatus;
 import com.mps.think.setup.vo.EnumModelVO.Status;
+import com.mps.think.setup.vo.EnumModelVO.SubDefStatus;
 
 @Component
 public class fetchRows {
 	
+	@Autowired
+	CustomerDetailsRepo CDRepo;
 	
 	@Autowired
 	private PublisherRepo pubRepo;
+	
+	@Autowired
+	OrderClassRepo OCRepo;
+	
+	@Autowired
+	LableFormatRepo LFRepo;
+	
+	@Autowired
+	LableGroupRepo LGRepo;
+	
+	@Autowired
+	OrderCodesSuperRepo OCSRepo;
+	
 	
 	@Autowired
 	private RateCardsRepo RCRepo;
@@ -58,10 +98,14 @@ public class fetchRows {
 	@Autowired
 	private OrderClassRepo ocRepo;
 	
-	public fetchRows(PublisherRepo PRepo) {
-		this.pubRepo = PRepo;
-		fetchRows.pub = pubRepo.findById(2).get();	
-		}
+//	public fetchRows(PublisherRepo PRepo) {
+//		this.pubRepo = PRepo;
+//		fetchRows.pub = pubRepo.findById(2).get();
+//		
+//		}
+	public void setPublisher(Publisher pub) {
+		fetchRows.pub = pub;
+	}
 	
 	public List<CustomerCategory> fetchCustomerCategory(Connection conn) {
 		
@@ -98,17 +142,18 @@ public class fetchRows {
 
 		try {
 			// Execute a prepared statement to retrieve data
-			PreparedStatement cust_category = conn.prepareStatement("Select * from customer;");
+			PreparedStatement cust_category = conn.prepareStatement("select * from customer order by customer_id  OFFSET 4000 ROWS FETCH NEXT 110 ROWS ONLY;");
 			ResultSet rs = cust_category.executeQuery();
-			// Set fetch size to retrieve 100 rows at a time
+			rs.setFetchSize(100);
 	        List<CustomerDetails> allRows = new ArrayList<CustomerDetails>();
 		//	Publisher pub1 = pubRepo.findById(1).get();
 
 			while (rs.next()) {
 	        	CustomerDetails cg = new CustomerDetails();
-	        	CustomerCategory CC = CCRepo.findByCustomerCategory(rs.getString("cust_category"));
+	        	cg.setCustomerId(rs.getInt("customer_id"));
+	        	CustomerCategory CC = ((rs.getString("customer_category")==null)?null:CCRepo.findByCustomerCategory(rs.getString("customer_category")));
 	        	cg.setCustomerCategory(CC);
-	        	cg.setThinkCategory(CC.getThinkCategory());
+	        	cg.setThinkCategory((CC==null)?null:CC.getThinkCategory());
 	        	cg.setSalutation(rs.getString("salutation"));
 	        	cg.setFname(rs.getString("fname"));
 	        	cg.setLname(rs.getString("lname"));
@@ -138,7 +183,8 @@ public class fetchRows {
 	        	cg.setCustAuxFieldJSON(null);
 	        	cg.setPublisher(pub);
 	        	List<CustomerAddresses> CAs = new ArrayList<CustomerAddresses>();
-	        	PreparedStatement address_stmt= conn.prepareStatement("select * from customer_address ca2 WHERE customer_id =;"+rs.getInt("customer_id"));
+	        	System.out.print("Fetching the address of the customer...\n");
+	        	PreparedStatement address_stmt= conn.prepareStatement("select * from customer_address ca2 WHERE customer_id ="+rs.getInt("customer_id")+";");
 	        	ResultSet rs_address = address_stmt.executeQuery();
 	        	while(rs_address.next()) {
 	        		CustomerAddresses CA = new CustomerAddresses();
@@ -157,11 +203,11 @@ public class fetchRows {
 	        		add.setZipCode(rs_address.getString("zip"));
 	        		add.setCity(rs_address.getString("city"));
 	        		add.setState(rs_address.getString("state"));
-	        		add.setCountry(rs_address.getString("country"));
+	        		add.setCountry(null);
 	        		add.setCountryCode(null);
 	        		add.setPhone(null);
 	        		add.setValidFrom(rs_address.getDate("effective_date"));
-	        		add.setValidTo(null);
+	        		add.setValidTo(rs_address.getDate("reverse_date"));
 	        		add.setFrequency(null);
 	        		add.setSelectionFrom(null);
 	        		add.setSelectionTo(null);
@@ -313,7 +359,7 @@ public class fetchRows {
 //			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
 
 			ResultSet rs = stmt.executeQuery();
-//			rs.setFetchSize(6000);
+//			rs.setFetchSize(100);
 			// Set fetch size to retrieve 100 rows at a time
 	        List<RateCardsRenewals> allRows = new ArrayList<RateCardsRenewals>();
 			while (rs.next()) {
@@ -342,30 +388,78 @@ public class fetchRows {
 		
 	}
 	
+	List<Terms> fetchTerms(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("SELECT * from ratecard r join rate_class rc on r.rate_class_id =rc.rate_class_id JOIN rate_class_effective rce on rc.rate_class_id =rce.rate_class_id ;");
+//			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(100);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<Terms> allRows = new ArrayList<Terms>();
+			while (rs.next()) {
+				Terms oc = new Terms();
+				oc.setPubId(pub);
+				oc.setTerm(rs.getString("term"));
+				oc.setDescription(rs.getString("description"));
+				oc.setSegmented(null);
+				oc.setSegment(null);
+				oc.setUnitsPerSegment(rs.getInt("n_cal_units_per_seg"));
+				oc.setQuantity(rs.getInt("n_issues"));
+				oc.setDuration(rs.getInt("n_calendar_units"));
+				oc.setUnitsInDuration(rs.getString(""));
+				oc.setVolumeGroupsToSpan(rs.getString("number_volume_sets"));
+				switch(rs.getString("start_type")) {
+				case "0": oc.setStartType("Anytime Starts");
+					break;
+				case "1": oc.setStartType("Volume Group Starts");
+					break;
+				case "2":oc.setStartType("Date Based with Issues");
+					break;
+				case "3":oc.setStartType("Date Based no Issues");
+					break;
+				case "4":oc.setStartType("Date based with Units");
+					break;
+				case "5":oc.setStartType("Unit Based no time");
+					break;
+				}
+				switch(rs.getInt("calendar_unit")) {
+				case 0: oc.setInstallmentterm("Day(s)");
+				break;
+				case 1: oc.setInstallmentterm("Week(s)");
+				break;
+				case 2: oc.setInstallmentterm("Months(s)");
+				break;
+				case 3: oc.setInstallmentterm("Years(s)");
+				break;
+				}
+				allRows.add(oc);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
 	List<OrderCodesSuper> fetchOrderCodesSuper(Connection conn){
 		try {
 			// Execute a prepared statement to retrieve data
-			PreparedStatement stmt_Order_Code = conn.prepareStatement("select * from order_code;");
 			PreparedStatement stmt_Order_class = conn.prepareStatement("select * from oc;");
-			PreparedStatement stmt_Order_Item_Details = conn.prepareStatement("select * from order_item");
-			ResultSet rs_Order_Code = stmt_Order_Code.executeQuery();
+			//PreparedStatement stmt_Order_Code = conn.prepareStatement("select * from order_code;");
+//			PreparedStatement stmt_Order_Item_Details = conn.prepareStatement("select * from order_item");
+			//ResultSet rs_Order_Code = stmt_Order_Code.executeQuery();
 			ResultSet rs_Order_Class = stmt_Order_class.executeQuery();
-			ResultSet rs_Order_Item_Details = stmt_Order_Item_Details.executeQuery();
+//			ResultSet rs_Order_Item_Details = stmt_Order_Item_Details.executeQuery();
+			
 //			rs.setFetchSize(6000);
 			// Set fetch size to retrieve 100 rows at a time
 	        List<OrderCodesSuper> allRows = new ArrayList<OrderCodesSuper>();
-			while (rs_Order_Code.next()||rs_Order_Class.next()) {
+			while (rs_Order_Class.next()) {
 				OrderCodesSuper OCS = new OrderCodesSuper();
 				OCS.setPublisher(pub);
-				OrderCodes oc = new OrderCodes();
-				oc.setOrderCode(rs_Order_Code.getString("order_code"));
-				oc.setDescription(rs_Order_Code.getString("Description"));
-				oc.setOrderType(rs_Order_Code.getString("order_code_type"));
-				oc.setOrderCodeId(rs_Order_Code.getString("order_code_id"));
-				oc.setOrderClassId(rs_Order_Code.getString("oc_id"));
-				oc.setRateCard(null);
-				oc.setDiscountCard(null);
-				OCS.setOrderCodes(oc);
 				OrderClass OC = new OrderClass();
 				OC.setOcId(rs_Order_Class.getInt("oc_id"));
 				OC.setOrderClassName(rs_Order_Class.getString("oc"));
@@ -381,19 +475,58 @@ public class fetchRows {
 				OC.setUpsellOn(rs_Order_Class.getString("upsell_on"));
 				OC.setPubId(pub);
 				OCS.setOrderClass(OC);
+				PreparedStatement stmt_Order_Code = conn.prepareStatement("select * from order_code where oc_id="+rs_Order_Class.getInt("oc_id")+";");
+				ResultSet rs_Order_Code = stmt_Order_Code.executeQuery();
+				OrderCodes oc = new OrderCodes();
+				oc.setOrderCode(rs_Order_Code.getString("order_code"));
+				oc.setDescription(rs_Order_Code.getString("Description"));
+				oc.setOrderType(rs_Order_Code.getString("order_code_type"));
+				oc.setOrderCodeId(rs_Order_Code.getString("order_code_id"));
+				oc.setOrderClassId(rs_Order_Code.getString("oc_id"));
+				oc.setRateCard(null);
+				oc.setDiscountCard(null);
+				OCS.setOrderCodes(oc);
+				PreparedStatement stmt_Order_Item_Details = conn.prepareStatement("select * from order_item where order_code_id="+rs_Order_Code.getInt("order_code_id")+";");
+				ResultSet rs_Order_Item_Details = stmt_Order_Item_Details.executeQuery();
 				OrderItemDetails OID = new OrderItemDetails();
-				OID.setEffectiveDate(rs_Order_Item_Details.getDate(""));
-				OID.setItemType(null);
+				OID.setEffectiveDate(rs_Order_Item_Details.getDate("order_date"));
+				OID.setItemType(rs_Order_Item_Details.getString("unit_type_id"));
 				OID.setItemImage(null);
 				OID.setPrice(null);
 				OID.setShippingWeight(null);
 				OID.setCommodityCode(null);
-				OID.setGraceQuanitity(null);
+				OID.setGraceQuanitity(rs_Order_Item_Details.getString("order_qty"));
 				OID.setMedia(null);
 				OID.setEdition(null);
 				OID.setCategory(null);
-				
-				
+				OrderPaymentOptions OPO = new OrderPaymentOptions();
+				OPO.setProformaOptions(rs_Order_Item_Details.getString("is_proforma"));
+				OPO.setCreditCardProcessing(null);
+				OPO.setInstallmentBilling(rs_Order_Item_Details.getString("installment_plan_id"));
+				OPO.setPrepaymentRequired(rs_Order_Item_Details.getBoolean("prepayment_req"));
+				OPO.setAutoReplace(null);
+				OPO.setChargeShipping(null);
+				OPO.setTaxable(rs_Order_Item_Details.getBoolean("has_tax"));
+				OPO.setIsActive(null);
+				OCS.setOrderPaymentOptions(OPO);
+				OrderOptions OO = new OrderOptions();
+				OO.setSubscriptionCalculation(null);
+				//0 Issue-based 1 Time-based 2 Unit-based 
+				OO.setRevenueRealisedBy(rs_Order_Item_Details.getString("revenue_method"));
+				OO.setTaxonomy(null);
+				OO.setRenewalCard(null);
+				OO.setControlled(null);
+				OO.setSegmentedOrder((rs_Order_Item_Details.getInt("n_segment_left")>0)?true:false);
+				OO.setGraceQuanitity(null);
+				OO.setTrialType(rs_Order_Item_Details.getString("trial_type"));
+				OO.setMedia(null);
+				OO.setEdition(null);
+				OO.setCategory(rs_Order_Item_Details.getString("order_category"));
+				OO.setNumOfDays(rs_Order_Item_Details.getInt("n_days_graced"));
+				OO.setNumOfUnits(rs_Order_Item_Details.getInt("n_cal_units_per_seg"));
+				PreparedStatement stmt_unit_type = conn.prepareStatement("select * from unit_type where unit_type_id="+rs_Order_Item_Details.getInt("unit_type_id")+";");
+				ResultSet rs_unit_type = stmt_unit_type.executeQuery();
+				OO.setUnitType(rs_unit_type.getString("description"));
 	        	allRows.add(OCS);
 	        }
 			return allRows;
@@ -402,6 +535,290 @@ public class fetchRows {
 			e.printStackTrace();
 		}
 		return Collections.emptyList();
+	}
+	
+	List<Order> fetchOrder(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt_Order_class = conn.prepareStatement("select * from oc;");
+			PreparedStatement stmt_Order_Item = conn.prepareStatement("select * from order_item;");
+			ResultSet rs_Order_Class = stmt_Order_class.executeQuery();
+			ResultSet rs_Order_Item = stmt_Order_Item.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<Order> allRows = new ArrayList<Order>();
+			while (rs_Order_Class.next()) {
+				Order Order = new Order();
+				CustomerDetails CD = CDRepo.findById(rs_Order_Item.getInt("customer_id")).get();
+				OrderClass OC = OCRepo.findById(rs_Order_Item.getInt("oc_id")).get();
+				Order.setOrderType(null);
+				Order.setOrderStatus(null);
+				Order.setCustomerId(CD);
+				Order.setOrderClass(OC);
+				OrderKeyInformation OKI = new OrderKeyInformation();
+				OKI.setAgent(null);
+				OKI.setAgentReferenceNum(null);
+				OKI.setOrderCategory(rs_Order_Item.getString("order_category"));
+				OKI.setOrderCode(null);
+				OKI.setOrderDate(null);
+				OKI.setOrderStatus(rs_Order_Item.getString("order_status"));
+				OKI.setPurchaseOrder(null);
+				OKI.setSourceCode(null);
+				Order.setKeyOrderInformation(OKI);
+				PreparedStatement stmt_Issue = conn.prepareStatement("select * from order_item where oc_id="+rs_Order_Class.getString("oc_id")+";");
+				ResultSet rs_Issue = stmt_Issue.executeQuery();
+//				PreparedStatement stmt_job_pub_oc = conn.prepareStatement("select * from job_pub_oc where oc_id="+rs_Order_Class.getString("oc_id")+";");
+//				ResultSet rs_job_pub_oc = stmt_job_pub_oc.executeQuery();
+				OrderItems OI = new OrderItems();
+				OI.setIssue(rs_Issue.getInt("issue_id"));
+				OI.setEnumeration(rs_Issue.getString("enumeration"));
+				OI.setCopiesPerIssue(null);
+				PreparedStatement stmt_subs_def = conn.prepareStatement("select * from subscription_def where oc_id="+rs_Order_Class.getString("oc_id")+";");
+				ResultSet rs_subs_def = stmt_subs_def.executeQuery();
+				SubscriptionDefKeyInfo SDKI = new SubscriptionDefKeyInfo();
+				SDKI.setPublisher(pub);
+				SDKI.setOrderClass(OC);
+				SDKI.setSubDefStatus((rs_subs_def.getInt("inactive")==0)?SubDefStatus.ACTIVE: SubDefStatus.INACTIVE);
+				SDKI.setDescription(rs_subs_def.getString("description"));
+				SDKI.setOrderCode(OCSRepo.findById(rs_subs_def.getInt("order_code_id")).get());
+				List<Terms> terms = new ArrayList<Terms>();
+				PreparedStatement stmt_terms = conn.prepareStatement("select * from term t left join subscription_def sd on t.term_id =sd.term_id where sd.oc_id  ="+rs_Order_Class.getString("oc_id")+";");
+				ResultSet rs_terms = stmt_terms.executeQuery();
+				while(rs_terms.next()) {
+					Terms oc = new Terms();
+					oc.setPubId(pub);
+					oc.setTerm(rs_terms.getString("term"));
+					oc.setDescription(rs_terms.getString("description"));
+					oc.setSegmented(null);
+					oc.setSegment(null);
+					oc.setUnitsPerSegment(rs_terms.getInt("n_cal_units_per_seg"));
+					oc.setQuantity(rs_terms.getInt("n_issues"));
+					oc.setDuration(rs_terms.getInt("n_calendar_units"));
+					oc.setUnitsInDuration(rs_terms.getString(""));
+					oc.setVolumeGroupsToSpan(rs_terms.getString("number_volume_sets"));
+					switch(rs_terms.getString("start_type")) {
+					case "0": oc.setStartType("Anytime Starts");
+						break;
+					case "1": oc.setStartType("Volume Group Starts");
+						break;
+					case "2":oc.setStartType("Date Based with Issues");
+						break;
+					case "3":oc.setStartType("Date Based no Issues");
+						break;
+					case "4":oc.setStartType("Date based with Units");
+						break;
+					case "5":oc.setStartType("Unit Based no time");
+						break;
+					}
+					switch(rs_terms.getInt("calendar_unit")) {
+					case 0: oc.setInstallmentterm("Day(s)");
+					break;
+					case 1: oc.setInstallmentterm("Week(s)");
+					break;
+					case 2: oc.setInstallmentterm("Months(s)");
+					break;
+					case 3: oc.setInstallmentterm("Years(s)");
+					break;
+					}
+					terms.add(oc);
+				}
+				SDKI.setTerms(terms);
+				SDKI.setSubDefId(rs_subs_def.getString("subscription_def_id"));
+				SDKI.setRateCard(RCRepo.findById(rs_subs_def.getInt("rate_class_id")).get());
+				SDKI.setRenewalCard(rs_subs_def.getString("renewal_card_id"));
+				SDKI.setOrderCodeType(null);
+				SDKI.setMedia(rs_subs_def.getString("media"));
+				SDKI.setEdition(rs_subs_def.getString("edition"));
+				SDKI.setCategory(rs_subs_def.getString("subscription_category_id"));
+				OI.setSubsProdPkgDef(SDKI);
+				OI.setNumOfIssues(null);
+				OI.setLiabilityIssue(null);
+				OI.setExtendedIssue(null);
+				OI.setTerm(null);
+				OI.setExtendedByDays(null);
+				Order.setOrderItemsAndTerms(OI);
+				PaymentBreakdown PB = new PaymentBreakdown();
+				PB.setCurrencyType(null);
+				PB.setCurrency(null);
+				PB.setPaymentStatus(null);
+				PB.setTerm(null);
+				PB.setBaseAmount(null);
+				PB.setDiscount(null);
+				PB.setTax(null);
+				PB.setGrossAmount(null);
+				PB.setCommission(null);
+				PB.setShippingCharge(null);
+				PB.setNetAmount(null);
+				Order.setPaymentBreakdown(PB);
+				OrderDeliveryOptions ODO = new OrderDeliveryOptions();
+				ODO.setDeliveryMethod(null);
+				ODO.setProformaPayment(null);
+				ODO.setSendRenewalNotice(null);
+				ODO.setAutoRenewal(null);
+				Order.setDeliveryAndBillingOptions(ODO);
+				
+				allRows.add(Order);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	
+	List<SourceFormat> fetchSourceFormat(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("SELECT * from source_attribute;");
+			PreparedStatement stmt_format = conn.prepareStatement("SELECT * from source_format;");
+
+			//			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+			ResultSet rs_format = stmt_format.executeQuery();
+//			rs.setFetchSize(100);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<SourceFormat> allRows = new ArrayList<SourceFormat>();
+			while (rs.next() || rs_format.next()) {
+				SourceAttributes oc = new SourceAttributes();
+				oc.setPublisher(pub);
+				oc.setAttribute(rs.getString("description"));
+				SourceFormatAndAttributeMapping SFAM = new SourceFormatAndAttributeMapping();
+				SFAM.setSourceAttributes(oc);
+				List<SourceFormatAndAttributeMapping> ListSFAM = new ArrayList<>();
+				ListSFAM.add(SFAM);
+				SourceFormat SF = new SourceFormat();
+				SF.setAttributeMappings(null);
+				SF.setSourceFormat(rs_format.getString("source_format"));
+				SF.setDescription(rs_format.getString("description"));
+				SF.setMruSourceFormatSegmentSeq(rs_format.getInt("mru_source_format_segment_seq"));
+				SF.setAttributeMappings(ListSFAM);
+				allRows.add(SF);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<ShippingPriceList> fetchShippingPriceList(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("SELECT * FROM shipping_price_list;");
+//			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(100);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<ShippingPriceList> allRows = new ArrayList<ShippingPriceList>();
+			while (rs.next()) {
+				ShippingPriceList oc = new ShippingPriceList();
+				oc.setPublisher(pub);
+				oc.setShippingPriceList(rs.getString("shipping_price_list"));
+				oc.setDescription(rs.getString("description"));
+				oc.setShippingMethod(rs.getString("shipping_method"));
+				allRows.add(oc);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<SourceCode> fetchSourceCode(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("SELECT * from source_code;");
+//			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+			List<SourceCode> allRows = new ArrayList<SourceCode>();
+			while (rs.next()) {
+				SourceCode oc = new SourceCode();
+				allRows.add(oc);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<PaymentType> fetchPaymentType(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from payment_type;");
+//			PreparedStatement stmt_rate = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(100);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<PaymentType> allRows = new ArrayList<PaymentType>();
+			while (rs.next()) {
+				PaymentType oc = new PaymentType();
+				oc.setPaymentType(rs.getString("payment_type"));
+				oc.setDescription(rs.getString("description"));
+				switch(rs.getString("payment_form")) {//form of payment: credit card, cash, ... 0 N/A 1 Credit Card 2 Cash 3 Check 4 Direct Debit 5 Credit Applied 6 Online Wallet 7 Gift Card 
+				case "0": oc.setPaymentForm("N/A");
+				break;
+				case "1": oc.setPaymentForm("Credit Card");
+				break;
+				case "2": oc.setPaymentForm("Cash");
+				break;
+				case "3": oc.setPaymentForm("Check");
+				break;
+				case "4": oc.setPaymentForm("Direct Debit");
+				break;
+				case "5": oc.setPaymentForm("Credit Applied");
+				break;
+				case "6": oc.setPaymentForm("Online Wallet");
+				break;
+				case "7": oc.setPaymentForm("Gift Card");
+				break;
+				default: oc.setPaymentForm(null);
+				}
+				
+				oc.setRealiseCashWhen(rs.getString("realize_cash_when"));
+				oc.setUseAsDefault(rs.getBoolean("use_as_default"));
+				switch(rs.getString("credit_card_type")) {//0 N/A 1 Visa 2 MasterCard 3 American Express 4 Discover 5 Other 6 Solo 7 Switch 8 Value-Link 
+				case "0": oc.setCreditCardType("N/A");
+				break;
+				case "1": oc.setCreditCardType("Visa");
+				break;
+				case "2": oc.setCreditCardType("MasterCard");
+				break;
+				case "3": oc.setCreditCardType("American Exxpress");
+				break;
+				case "4": oc.setCreditCardType("Discover");
+				break;
+				case "5": oc.setCreditCardType("Other");
+				break;
+				case "6": oc.setCreditCardType("Solo");
+				break;
+				case "7": oc.setCreditCardType("Switch");
+				break;
+				case "8": oc.setCreditCardType("Value-Link");
+				break;
+				default: oc.setCreditCardType(null);
+				}
+				oc.setCvv(null);
+				oc.setPublisher(pub);
+	        	allRows.add(oc);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+		
 	}
 	
 //	List<CustomerCategory> fetchCustoemrCategory(Connection conn){
@@ -487,7 +904,6 @@ public class fetchRows {
 			if (rs.getString("address_type").equals("BUSINESS")) a.setAddressType(AddressType.Business);
 			else if (rs.getString("address_type").equals("RESIDENCE")) a.setAddressType(AddressType.Residential);
 			else a.setAddressType(AddressType.Other);
-			
 			a.setStatus(Status.Active);
 			a.setName(rs.getString("fname")+" "+rs.getString("lname"));
 			a.setAddressLine1(rs.getString("address1"));
@@ -549,5 +965,143 @@ public class fetchRows {
 		return Collections.emptyList();
 	}
 
+	List<LableFormat> fetchLabelFormat(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from label_format;");
+//			PreparedStatement stmt = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<LableFormat> allRows = new ArrayList<LableFormat>();
+			while (rs.next()) {
+				LableFormat LF = new LableFormat();
+				LF.setPubId(pub);
+				LF.setLableFormat(rs.getString("label_format"));
+				LF.setDescription(rs.getString("description"));
+	        	allRows.add(LF);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<LableGroup> fetchLableGroup(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from label_group;");
+//			PreparedStatement stmt = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<LableGroup> allRows = new ArrayList<LableGroup>();
+			while (rs.next()) {
+				LableGroup LG = new LableGroup();
+				LG.setPubId(pub);
+				LG.setLableGroups(rs.getString("lable_group"));
+				LG.setDescription(rs.getString("description"));
+	        	allRows.add(LG);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	List<LableKeyLine> fetchLabelKeyLine(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from label_keyline;");
+//			PreparedStatement stmt = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<LableKeyLine> allRows = new ArrayList<LableKeyLine>();
+			while (rs.next()) {
+				LableKeyLine LF = new LableKeyLine();
+				LF.setPubId(pub);
+				LF.setLabelKeyline(rs.getString("label_keyline"));
+				LF.setSuppressflag(rs.getBoolean("suppress_flag"));
+				LF.setDescription(rs.getString("description"));
+				LF.setCurrentIssue(null);
+				LF.setCurrentVolume(null);
+				LF.setText(null);
+	        	allRows.add(LF);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<LableFormatGroups> fetchLabelFormatGroups(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from label_format_detail;");
+//			PreparedStatement stmt = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<LableFormatGroups> allRows = new ArrayList<LableFormatGroups>();
+			while (rs.next()) {
+				LableFormatGroups LFG = new LableFormatGroups();
+				LFG.setPubId(pub);
+				LableFormat LF = new LableFormat();
+				LF = LFRepo.findById(rs.getInt("label_format")).get();
+				LableGroup LG = new LableGroup();
+				LG = LGRepo.findById(rs.getInt("label_group")).get();
+				LFG.setLableFormat(LF);
+				LFG.setDescription(null);
+				LFG.setLablegroup(LG);
+	        	allRows.add(LFG);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
+	
+	List<ProfitCenter> fetchProfitCenter(Connection conn){
+		try {
+			// Execute a prepared statement to retrieve data
+			PreparedStatement stmt = conn.prepareStatement("select * from profit_center;");
+//			PreparedStatement stmt = conn.prepareStatement("select * from rate_class;");
+
+			ResultSet rs = stmt.executeQuery();
+//			rs.setFetchSize(6000);
+			// Set fetch size to retrieve 100 rows at a time
+	        List<ProfitCenter> allRows = new ArrayList<ProfitCenter>();
+			while (rs.next()) {
+				ProfitCenter LFG = new ProfitCenter();
+				LFG.setPubId(pub);
+				LFG.setProfitDescription(rs.getString("description"));
+				LFG.setProfitCenter(rs.getString("profit_center"));
+				LFG.setInclTaxLiab(rs.getInt("incl_tax_liab"));
+				LFG.setInclDelLiab(rs.getInt("incl_del_liab"));
+				LFG.setInclComLiab(rs.getInt("incl_com_liab"));
+				LFG.setInclComAr(rs.getInt("incl_com_ar"));
+				LFG.setInclDelAr(rs.getInt("incl_del_ar"));
+				LFG.setInclTaxAr(rs.getInt("incl_tax_ar"));
+	        	allRows.add(LFG);
+	        }
+			return allRows;
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return Collections.emptyList();
+	}
 	
 }

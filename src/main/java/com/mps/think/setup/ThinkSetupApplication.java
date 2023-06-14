@@ -65,6 +65,7 @@ public class ThinkSetupApplication extends SpringBootServletInitializer {
 	public void runAfterObjectCreated() {
 		pubRepo.save(new Publisher());
 		pubRepo.save(new Publisher());
+		pubRepo.save(new Publisher());
 	}
 	
 }

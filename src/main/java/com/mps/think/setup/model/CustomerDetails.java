@@ -39,7 +39,7 @@ public class CustomerDetails  extends BaseEntity{
 	private Integer customerId;
 	
 //	@Enumerated(EnumType.STRING)
-	@OneToOne
+	@OneToOne(cascade= {CascadeType.ALL})
 	@JoinColumn(name = "customerCategory", referencedColumnName = "customer_category_id")
 	private CustomerCategory customerCategory;
 	
@@ -69,7 +69,8 @@ public class CustomerDetails  extends BaseEntity{
 	@Column(name = "department")
 	private String department;
 	
-	@Email
+//	@Email(regexp = "[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,3}.",
+//            flags = Pattern.Flag.CASE_INSENSITIVE)
 	@Column(name = "email")
 	private String email;
 	
